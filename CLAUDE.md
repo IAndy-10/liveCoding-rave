@@ -89,6 +89,50 @@ Ndef(\rave_birds).stop;
 ~cc.stop;
 ```
 
+## Initialization Check
+
+`cc_execute` can trigger a CC auto-reboot, which restarts the SC server and wipes all environment variables (including `~raveBuses` and the RAVE Ndefs). **Always check before playing:**
+
+```supercollider
+~raveBuses.postln;
+```
+
+If the result is `nil`, re-initialize RAVE before sending any patterns:
+
+```supercollider
+Routine({
+    ~modelDir = thisProcess.nowExecutingPath.dirname +/+ "models/";
+    NN.load(\birds,         ~modelDir ++ "birds.ts");
+    NN.load(\marinemammals, ~modelDir ++ "marinemammals.ts");
+    NN.load(\wheel,         ~modelDir ++ "wheel.ts");
+    s.sync;
+    ~raveBuses = Dictionary.new;
+    ~raveBuses[\birds]         = Bus.audio(s, 1);
+    ~raveBuses[\marinemammals] = Bus.audio(s, 1);
+    ~raveBuses[\wheel]         = Bus.audio(s, 1);
+    Ndef(\rave_birds, {
+        var in  = InBus.ar(~raveBuses[\birds], 1);
+        var out = NN(\birds, \forward).ar(in, 2048);
+        (out ! 2) * \gain.kr(0.8)
+    }).play;
+    Ndef(\rave_marinemammals, {
+        var in  = InBus.ar(~raveBuses[\marinemammals], 1);
+        var out = NN(\marinemammals, \forward).ar(in, 2048);
+        (out ! 2) * \gain.kr(0.8)
+    }).play;
+    Ndef(\rave_wheel, {
+        var in  = InBus.ar(~raveBuses[\wheel], 1);
+        var out = NN(\wheel, \forward).ar(in, 2048);
+        (out ! 2) * \gain.kr(0.8)
+    }).play;
+    "RAVE ready".postln;
+}).play;
+```
+
+**cc_execute code rules** (to avoid syntax errors):
+- Use `~envVars` instead of `var` for top-level declarations — `var` fails inside `cc_execute`'s wrapper
+- Wrap any code using `s.sync` in a `Routine({ ... }).play`
+
 ## Notes
 
 - All `cc_*` drums need `\freq, 48` to sound correct — this applies when routed through RAVE too.

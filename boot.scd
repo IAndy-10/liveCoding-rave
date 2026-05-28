@@ -9,7 +9,7 @@
 
 ~cc = CC.boot(onComplete: {
 
-    var modelDir = "/Users/italo/Desktop/Audio Programming Languages/liveCoding-rave/models/";
+    var modelDir = thisProcess.nowExecutingPath.dirname +/+ "models/";
 
     // ── Load RAVE models ──────────────────────────────────
     NN.load(\birds,         modelDir ++ "birds.ts");
@@ -52,3 +52,18 @@
     "  Now talk to Claude.".postln;
     "════════════════════════════════════".postln;
 });
+
+/*
+### Talk to Claude
+
+With ClaudeCollider connected as an MCP server, open a conversation with Claude and start describing what you want:
+
+> "Make a slow dark ambient texture using the birds model"
+
+> "Play a beat with kick and hi-hats going through the marine mammals model, add some reverb"
+
+> "Route the bass through the wheel model and the melody through birds, give them different rhythms"
+
+Claude will generate SuperCollider patterns and execute them live. The audio is processed through the RAVE model you asked for.
+
+*/
