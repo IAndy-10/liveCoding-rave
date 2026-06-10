@@ -1,112 +1,72 @@
-# liveCoding-rave
+# NeoChucao — Python + Supriya Architecture
 
-Live coding with [RAVE](https://github.com/caillonantoine/RAVE) neural audio models and [ClaudeCollider](https://github.com/jeremyruppel/claude-collider) — where you describe the music and Claude plays it, processed through neural synthesis in real time.
+This branch (`python+supriya_architecture`) is an iteration of the [main branch](../../tree/main) project. The original implementation used SuperCollider scripts directly; this version replaces that with a Python-driven architecture, using **Supriya** as the bridge to the SuperCollider audio server (`scsynth`).
 
-## What is this
+> This codebase was developed with LLM assistance — Claude Sonnet 4.6 (Anthropic) was used throughout the design and implementation process.
 
-RAVE is a neural network that learns the timbre of a sound world (birds, marine mammals, machinery...) and can transform any audio into that sound world in real time.
+---
 
-ClaudeCollider is an MCP server that lets Claude generate and execute SuperCollider code live.
+## Stack
 
-This repo wires them together: you talk to Claude, Claude composes patterns using SuperCollider synths, and the audio passes through RAVE models before reaching your speakers.
+| Layer | Technology |
+|---|---|
+| Audio server | **SuperCollider** (`scsynth`) |
+| SC bindings | **Supriya** — Python API for SuperCollider |
+| Neural audio | **RAVE** — Real-time Audio Variational autoEncoder |
+| SC neural UGen | **nn.ar** — SuperCollider extension for running `.ts` models |
+| ML runtime | **PyTorch** (`torch`) |
+| MIDI I/O | **mido** + **python-rtmidi** |
+| Visualization | **vispy** — real-time 3D OpenGL latent space display |
+| UI dialogs | **PyQt5** |
+| Audio devices | **sounddevice** — enumerates system audio outputs |
+| Numerics | **NumPy** |
 
-```
-You ──→ Claude ──→ SuperCollider patterns ──→ RAVE model ──→ speakers
-```
+---
 
-## Prerequisites
+## How it works
 
-- [SuperCollider](https://supercollider.github.io)
-- [nn.ar](https://github.com/elgiano/nn.ar) — install the arm64 release into your SC Extensions folder
-- [ClaudeCollider](https://github.com/jeremyruppel/claude-collider) — MCP server running and connected to Claude
+1. Python boots `scsynth` via Supriya and kills any stale process on startup.
+2. The RAVE model is loaded into `scsynth` via raw OSC (`/nn_load`) using the `nn.ar` UGen.
+3. A `rave_decoder` SynthDef (pre-compiled `.scsyndef`) is loaded; each MIDI note spawns a new node with latent coordinates derived from pitch and velocity.
+4. An FX chain (FreeVerb reverb, compiled at runtime by Supriya) sits at the tail of the default group and writes to the hardware output.
+5. A real-time 3D visualizer (vispy) renders the current latent position `(z0, z1, z2)` with a fading trail at 60 fps.
 
-## Installation
+---
 
-Clone or download this repo. No further installation needed — it's just `.scd` files.
+## Setup
 
-Place your RAVE `.ts` model files in the `models/` folder. Models used by default:
+### 1. Dependencies
 
-| File                  | Character                |
-|-----------------------|--------------------------|
-| `birds.ts`            | organic, airy, avian     |
-| `marinemammals.ts`    | deep, resonant, watery   |
-| `wheel.ts`            | mechanical, metallic     |
+Create a virtual environment, activate it, and install dependencies:
 
-Download models from Hugging Face: [Intelligent-Instruments-Lab/rave-models](https://huggingface.co/Intelligent-Instruments-Lab/rave-models/tree/main)
-
-## How to use
-
-### 1. Boot SuperCollider
-
-Open `boot.scd` in the SuperCollider IDE. Select all (`Cmd+A`) and run (`Cmd+Enter`).
-
-Wait for the post window to show:
-
-```
-════════════════════════════════════
-  liveCoding-rave ready
-  Models : birds | marinemammals | wheel
-  Now talk to Claude.
-════════════════════════════════════
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### 2. Talk to Claude
+You also need:
+- **SuperCollider** installed at `/Applications/SuperCollider.app` (macOS)
+- **nn.ar** SuperCollider extension — install it in your SC `Extensions` folder
 
-With ClaudeCollider connected as an MCP server, open a conversation with Claude and start describing what you want:
+### 2. RAVE model
 
-> "Make a slow dark ambient texture using the birds model"
+Download the birds model from Hugging Face and place it in the `models/` folder, renamed to `birds.ts`:
 
-> "Play a beat with kick and hi-hats going through the marine mammals model, add some reverb"
-
-> "Route the bass through the wheel model and the melody through birds, give them different rhythms"
-
-Claude will generate SuperCollider patterns and execute them live. The audio is processed through the RAVE model you asked for.
-
-### 3. Keep talking
-
-You can change things mid-session:
-
-> "Make the melody faster"
-> "Switch the drums to the wheel model"
-> "Add delay to the birds output"
-> "Stop everything and start something more energetic"
-
-## Signal flow
+**[birds_motherbird_b2048_r48000_z16.ts](https://huggingface.co/Intelligent-Instruments-Lab/rave-models/blob/main/birds_motherbird_b2048_r48000_z16.ts)**
 
 ```
-   Pbind (\cc_lead, \cc_kick, \cc_bass...)
-         │
-         ▼
-   ~raveBuses[\birds | \marinemammals | \wheel]
-         │
-         ▼
-   Ndef  (\rave_birds | \rave_marinemammals | \rave_wheel)
-         │
-         ▼
-   ~cc.fx (reverb, delay, distortion...) [optional]
-         │
-         ▼
-      speakers
+models/
+└── birds.ts    <-- rename the downloaded file to this
 ```
 
-Each model runs on its own bus and Ndef, so multiple models can process different instruments simultaneously.
+### 3. Run
 
-## Standalone examples
+Activate the virtual environment (if not already active), then launch:
 
-The `examples/` folder contains standalone `.scd` files for using RAVE without ClaudeCollider — useful for learning or experimenting directly in SuperCollider:
-
-| File     | Description                                      |
-|----------|--------------------------------------------------|
-| `1.scd`  | Single RAVE model, switchable, pattern-based     |
-| `2.scd`  | Two models in parallel (birds + marinemammals)   |
-| `3.scd`  | Microphone input processed through RAVE          |
-
-These run independently — no ClaudeCollider needed.
-
-## Stopping
-
-Say "stop everything" to Claude, or in SuperCollider:
-
-```supercollider
-Cmd+.
+```bash
+source venv/bin/activate
+python main.py # or python3 main.py
 ```
+
+A dialog will prompt you to select your audio output and MIDI input device. Close the visualizer window to quit.
