@@ -1,72 +1,58 @@
-# NeoChucao — Python + Supriya Architecture
+# NeoChucao
 
-This branch (`python+supriya_architecture`) is an iteration of the [main branch](../../tree/main) project. The original implementation used SuperCollider scripts directly; this version replaces that with a Python-driven architecture, using **Supriya** as the bridge to the SuperCollider audio server (`scsynth`).
+SuperCollider scripts for live performance and generative composition with RAVE neural audio models.
 
-> This codebase was developed with LLM assistance — Claude Sonnet 4.6 (Anthropic) was used throughout the design and implementation process.
+> Developed with LLM assistance — Claude Sonnet 4.6 (Anthropic).
 
 ---
 
-## Stack
+## Files
 
-| Layer | Technology |
+| File | Description |
 |---|---|
-| Audio server | **SuperCollider** (`scsynth`) |
-| SC bindings | **Supriya** — Python API for SuperCollider |
-| Neural audio | **RAVE** — Real-time Audio Variational autoEncoder |
-| SC neural UGen | **nn.ar** — SuperCollider extension for running `.ts` models |
-| ML runtime | **PyTorch** (`torch`) |
-| MIDI I/O | **mido** + **python-rtmidi** |
-| Visualization | **vispy** — real-time 3D OpenGL latent space display |
-| UI dialogs | **PyQt5** |
-| Audio devices | **sounddevice** — enumerates system audio outputs |
-| Numerics | **NumPy** |
+| `rave_midi_filter.scd` | MIDI keyboard → RAVE latent space → audio. Maps pitch, velocity, and mod wheel to 16 latent dimensions. Polyphonic voice manager with compressor, chorus, and reverb. Includes a GUI. |
+| `d_dorian_dark.scd` | Generative D Dorian dark rhythmic patch — bass drone, melodic voice, kick, hi-hats, and stabs routed through a delay bus at 80 bpm. |
 
 ---
 
-## How it works
+## Prerequisites
 
-1. Python boots `scsynth` via Supriya and kills any stale process on startup.
-2. The RAVE model is loaded into `scsynth` via raw OSC (`/nn_load`) using the `nn.ar` UGen.
-3. A `rave_decoder` SynthDef (pre-compiled `.scsyndef`) is loaded; each MIDI note spawns a new node with latent coordinates derived from pitch and velocity.
-4. An FX chain (FreeVerb reverb, compiled at runtime by Supriya) sits at the tail of the default group and writes to the hardware output.
-5. A real-time 3D visualizer (vispy) renders the current latent position `(z0, z1, z2)` with a fading trail at 60 fps.
+- [SuperCollider](https://supercollider.github.io)
+- [nn.ar](https://github.com/elgiano/nn.ar) — install the arm64 release into your SC Extensions folder
 
 ---
 
-## Setup
+## Model
 
-### 1. Dependencies
-
-Create a virtual environment, activate it, and install dependencies:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-You also need:
-- **SuperCollider** installed at `/Applications/SuperCollider.app` (macOS)
-- **nn.ar** SuperCollider extension — install it in your SC `Extensions` folder
-
-### 2. RAVE model
-
-Download the birds model from Hugging Face and place it in the `models/` folder, renamed to `birds.ts`:
-
-**[birds_motherbird_b2048_r48000_z16.ts](https://huggingface.co/Intelligent-Instruments-Lab/rave-models/blob/main/birds_motherbird_b2048_r48000_z16.ts)**
+Place your RAVE `.ts` model file in the `models/` folder:
 
 ```
 models/
-└── birds.ts    <-- rename the downloaded file to this
+└── birds.ts
 ```
 
-### 3. Run
+Download the birds model from Hugging Face and rename it to `birds.ts`:
 
-Activate the virtual environment (if not already active), then launch:
+**[birds_motherbird_b2048_r48000_z16.ts](https://huggingface.co/Intelligent-Instruments-Lab/rave-models/blob/main/birds_motherbird_b2048_r48000_z16.ts)**
 
-```bash
-source venv/bin/activate
-python main.py # or python3 main.py
+---
+
+## How to use
+
+### rave_midi_filter.scd
+
+Open in the SuperCollider IDE and run each block in order:
+
+1. **Block 1** — boots the server, loads the RAVE model, defines the SynthDef. Wait for `"Ready."`.
+2. **Block 2** — connects your MIDI keyboard and starts the voice manager.
+3. **Block 3** *(optional)* — opens a GUI with sliders for mod wheel, noise, reverb, chorus, and more.
+4. **Block 4** — stops all voices and disconnects MIDI.
+
+### d_dorian_dark.scd
+
+Open in the SuperCollider IDE, select all (`Cmd+A`) and run (`Cmd+Enter`). All patterns start automatically.
+
+Stop with:
+```supercollider
+~melody.stop; ~kick.stop; ~hats.stop; ~stab.stop;
 ```
-
-A dialog will prompt you to select your audio output and MIDI input device. Close the visualizer window to quit.

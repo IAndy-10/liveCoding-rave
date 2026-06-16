@@ -1,8 +1,0 @@
-supriya
-mido
-python-rtmidi
-vispy
-PyQt5
-torch
-numpy
-sounddevice
