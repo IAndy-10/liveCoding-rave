@@ -8,10 +8,10 @@ RAVE is a neural network that learns the timbre of a sound world (birds, marine 
 
 ClaudeCollider is an MCP server that lets Claude generate and execute SuperCollider code live.
 
-This repo wires them together: you talk to Claude, Claude composes patterns using SuperCollider synths, and the audio passes through RAVE models before reaching your speakers.
+This repo wires them together: you talk to Claude, Claude composes SuperCollider patterns using RAVE as the instrument, and the audio reaches your speakers transformed through neural synthesis in real time.
 
 ```
-You ──→ Claude ──→ SuperCollider patterns ──→ RAVE model ──→ speakers
+You ──→ Claude ──→ Pbind(\instrument, \rave_birds) ──→ speakers
 ```
 
 ## Prerequisites
@@ -24,19 +24,23 @@ You ──→ Claude ──→ SuperCollider patterns ──→ RAVE model ─�
 
 Clone or download this repo. No further installation needed — it's just `.scd` files.
 
-Place your RAVE `.ts` model files in the `models/` folder. Models used by default:
+Place your RAVE `.ts` model files in the `models/` folder. The default model is:
 
-| File                  | Character                |
-|-----------------------|--------------------------|
-| `birds.ts`            | organic, airy, avian     |
-| `marinemammals.ts`    | deep, resonant, watery   |
-| `wheel.ts`            | mechanical, metallic     |
+| File         | SynthDef       | Character            |
+|--------------|----------------|----------------------|
+| `birds.ts`   | `\rave_birds`  | organic, airy, avian |
+
+Additional models (`marinemammals.ts`, `wheel.ts`) can be added to `boot.scd` as extra SynthDefs when needed.
 
 Download models from Hugging Face: [Intelligent-Instruments-Lab/rave-models](https://huggingface.co/Intelligent-Instruments-Lab/rave-models/tree/main)
 
 ## How to use
 
-### 1. Boot SuperCollider
+### 1. Connect Claude first
+
+Open a conversation with Claude (ClaudeCollider must be connected as an MCP server). Claude will run a short dummy command that triggers a scsynth reboot — this is intentional and happens on an empty server.
+
+### 2. Boot SuperCollider
 
 Open `boot.scd` in the SuperCollider IDE. Select all (`Cmd+A`) and run (`Cmd+Enter`).
 
@@ -45,42 +49,40 @@ Wait for the post window to show:
 ```
 ════════════════════════════════════
   liveCoding-rave ready
-  Models : birds | marinemammals | wheel
+  Model   : birds
+  SynthDef: \rave_birds
   Now talk to Claude.
 ════════════════════════════════════
 ```
 
-### 2. Talk to Claude
+### 3. Talk to Claude
 
-With ClaudeCollider connected as an MCP server, open a conversation with Claude and start describing what you want:
+Start describing what you want:
 
 > "Make a slow dark ambient texture using the birds model"
 
-> "Play a beat with kick and hi-hats going through the marine mammals model, add some reverb"
+> "Play a Phrygian melody through birds with long reverb tails"
 
-> "Route the bass through the wheel model and the melody through birds, give them different rhythms"
+> "Layer two drones a fifth apart, slow attack, wide stereo"
 
-Claude will generate SuperCollider patterns and execute them live. The audio is processed through the RAVE model you asked for.
+Claude composes Pbind patterns using `\rave_birds` directly as the instrument — no bus routing needed.
 
-### 3. Keep talking
+### 4. Keep talking
 
 You can change things mid-session:
 
-> "Make the melody faster"
-> "Switch the drums to the wheel model"
-> "Add delay to the birds output"
-> "Stop everything and start something more energetic"
+> "Make it slower and darker"
+> "Add a sparse high layer"
+> "Stop everything and start something more rhythmic"
 
 ## Signal flow
 
 ```
-   Pbind (\cc_lead, \cc_kick, \cc_bass...)
+   Pbind(\instrument, \rave_birds, \freq, ...)
          │
          ▼
-   ~raveBuses[\birds | \marinemammals | \wheel]
-         │
-         ▼
-   Ndef  (\rave_birds | \rave_marinemammals | \rave_wheel)
+   SynthDef(\rave_birds)   ← defined on scsynth by boot.scd
+   SinOsc → EnvGen → NN(\birds, \forward) → Pan2
          │
          ▼
    ~cc.fx (reverb, delay, distortion...) [optional]
@@ -89,7 +91,7 @@ You can change things mid-session:
       speakers
 ```
 
-Each model runs on its own bus and Ndef, so multiple models can process different instruments simultaneously.
+RAVE runs inline inside the SynthDef. The SynthDef lives on scsynth and is visible to both the SC IDE and Claude's sclang process — no bus routing or Ndef needed.
 
 ## Standalone examples
 
@@ -105,8 +107,11 @@ These run independently — no ClaudeCollider needed.
 
 ## Stopping
 
-Say "stop everything" to Claude, or in SuperCollider:
+Say "stop everything" to Claude, or:
 
 ```supercollider
-Cmd+.
+~cc.stop;       // stop all patterns safely
+// Cmd+. also works but only stops synth nodes — SynthDefs persist
 ```
+
+Never use `s.freeAll` — it kills ClaudeCollider's limiter chain permanently.
