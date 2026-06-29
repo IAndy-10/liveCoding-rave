@@ -7,51 +7,52 @@
   After boot, talk to Claude to start making music.
 */
 
+Server.default.options.sampleRate = 44100;
+Server.default.options.maxLogins  = 2;
+Server.killAll;
+
 ~cc = CC.boot(onComplete: {
 
-    var modelDir = thisProcess.nowExecutingPath.dirname +/+ "models/";
+    Routine {
+        var modelDir = thisProcess.nowExecutingPath.dirname +/+ "models/";
 
-    // ── Load RAVE models ──────────────────────────────────
-    NN.load(\birds,         modelDir ++ "birds.ts");
-    NN.load(\marinemammals, modelDir ++ "marinemammals.ts");
-    NN.load(\wheel,         modelDir ++ "wheel.ts");
+        // ── Load RAVE models ──────────────────────────────────
+        NN.load(\birds, modelDir ++ "birds.ts");
+        s.sync;
 
-    s.sync;
+        // ── Define RAVE SynthDefs ─────────────────────────────
+        // SynthDefs are stored on scsynth and are visible to ALL clients,
+        // including the CC MCP sclang. This means Claude can use
+        // \instrument, \rave_birds directly in Pbind — no bus routing
+        // or Ndef needed. Only CC MCP creates nodes during performance,
+        // so there is no nodeID collision between the two sclang processes.
 
-    // ── Create one audio bus per model ────────────────────
-    ~raveBuses = Dictionary.new;
-    ~raveBuses[\birds]         = Bus.audio(s, 1);
-    ~raveBuses[\marinemammals] = Bus.audio(s, 1);
-    ~raveBuses[\wheel]         = Bus.audio(s, 1);
+        SynthDef(\rave_birds, {
+            |out=0, freq=440, amp=0.5, gate=1, atk=0.01, rel=2, pan=0, gain=0.8|
+            var sig       = SinOsc.ar(freq);
+            var env       = EnvGen.kr(Env.asr(atk, 1, rel), gate, doneAction: 2);
+            var processed = NN(\birds, \forward).ar(sig * amp * env, 2048);
+            Out.ar(out, Pan2.ar(processed * gain, pan));
+        }).add;
 
-    // ── Create one RAVE Ndef per model ────────────────────
-    Ndef(\rave_birds, {
-        var in  = InBus.ar(~raveBuses[\birds], 1);
-        var out = NN(\birds, \forward).ar(in, 2048);
-        (out ! 2) * \gain.kr(0.8)
-    }).play;
+        s.sync;
 
-    Ndef(\rave_marinemammals, {
-        var in  = InBus.ar(~raveBuses[\marinemammals], 1);
-        var out = NN(\marinemammals, \forward).ar(in, 2048);
-        (out ! 2) * \gain.kr(0.8)
-    }).play;
+        // ── Write marker file for Claude ──────────────────────
+        File.use("/tmp/rave_synthdef.sc", "w", { |f|
+            f.write("\"rave_synthdef boot confirmed\".postln;\n");
+        });
 
-    Ndef(\rave_wheel, {
-        var in  = InBus.ar(~raveBuses[\wheel], 1);
-        var out = NN(\wheel, \forward).ar(in, 2048);
-        (out ! 2) * \gain.kr(0.8)
-    }).play;
+        // ── Done ──────────────────────────────────────────────
+        "════════════════════════════════════".postln;
+        "  liveCoding-rave ready".postln;
+        "  Model   : birds".postln;
+        "  SynthDef: \\rave_birds".postln;
+        "  Now talk to Claude.".postln;
+        "════════════════════════════════════".postln;
 
-    // ── Done ──────────────────────────────────────────────
-    "════════════════════════════════════".postln;
-    "  liveCoding-rave ready".postln;
-    "  Models : birds | marinemammals | wheel".postln;
-    "  Buses  : ~raveBuses[\\birds|\\marinemammals|\\wheel]".postln;
-    "  Ndefs  : \\rave_birds | \\rave_marinemammals | \\rave_wheel".postln;
-    "  Now talk to Claude.".postln;
-    "════════════════════════════════════".postln;
+    }.play;
 });
+
 
 /*
 ### Talk to Claude
@@ -60,10 +61,14 @@ With ClaudeCollider connected as an MCP server, open a conversation with Claude 
 
 > "Make a slow dark ambient texture using the birds model"
 
-> "Play a beat with kick and hi-hats going through the marine mammals model, add some reverb"
+> "Play a Phrygian melody through birds"
 
-> "Route the bass through the wheel model and the melody through birds, give them different rhythms"
+Claude uses \rave_birds directly as the Pbind instrument — no bus routing needed.
+The SynthDef lives on scsynth and is available to Claude's sclang process automatically.
 
-Claude will generate SuperCollider patterns and execute them live. The audio is processed through the RAVE model you asked for.
+--
+To debug:
+s.queryAllNodes;      // check active nodes
+s.sampleRate.postln;  // must be 44100 for RAVE to work
 
 */
